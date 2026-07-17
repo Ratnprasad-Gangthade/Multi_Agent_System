@@ -1,3 +1,13 @@
+from dotenv import load_dotenv, find_dotenv
+import os
+
+print("Current Working Directory:", os.getcwd())
+print("ENV FILE FOUND:", find_dotenv())
+
+load_dotenv(find_dotenv(), override=True)
+
+#print("Loaded Key:", os.getenv("GROQ_API_KEY"))
+
 from dotenv import load_dotenv
 import os
 
@@ -12,9 +22,8 @@ load_dotenv()
 
 # Model Setup
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
+    model="llama-3.1-8b-instant",
+    temperature=0
 )
 
 #1st agent 
