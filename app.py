@@ -38,13 +38,7 @@ if st.button("Run Research Pipeline", type="primary", disabled=not topic):
             "messages": [("user", f"Find recent, reliable and detailed information about: {topic}")]
         })
 
-        tool_output = ""
-        for msg in search_results["messages"]:
-            if msg.__class__.__name__ == "ToolMessage":
-                tool_output = msg.content
-                break
-
-        state["search_results"] = tool_output
+        state["search_results"] = search_results["messages"][-1].content
         status.update(label="✅ Step 1 — Search complete", state="complete", expanded=False)
 
     with st.expander("📄 Search Results"):
@@ -78,13 +72,21 @@ if st.button("Run Research Pipeline", type="primary", disabled=not topic):
             "topic": topic,
             "research": research_combined
         })
+
+        if len(state["report"]) > 1800:
+            state["report"] = state["report"][:1800].rsplit("\n\n", 1)[0] + "\n\n..."
+
         status.update(label="✅ Step 3 — Report drafted", state="complete", expanded=False)
 
     # Step 4: Critic Agent
     with st.status("🧐 Step 4 — Critic is reviewing the report...", expanded=True) as status:
-        state["feedback"] = critic_chain.invoke({
-            "report": state["report"]
-        })
+        try:
+            state["feedback"] = critic_chain.invoke({
+                "report": state.get("report", "No report generated")
+            })
+        except Exception:
+            state["feedback"] = "Critic feedback is unavailable right now."
+
         status.update(label="✅ Step 4 — Review complete", state="complete", expanded=False)
 
     # --- Final Output ---
@@ -98,7 +100,10 @@ if st.button("Run Research Pipeline", type="primary", disabled=not topic):
 
     with col2:
         st.subheader("💬 Critic Feedback")
-        st.markdown(state["feedback"])
+        if state.get("feedback"):
+            st.markdown(state["feedback"])
+        else:
+            st.info("Critic feedback is empty. The pipeline did not return a review.")
 
     # Success banner
     st.success("Pipeline complete! All 4 agents have finished their work.")

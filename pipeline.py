@@ -1,5 +1,6 @@
 from agents import build_reader_agent , build_search_agent, writer_chain , critic_chain
 
+
 def run_research_pipeline(topic : str) -> dict:
 
     state= {}
@@ -13,14 +14,7 @@ def run_research_pipeline(topic : str) -> dict:
     search_results=search_agent.invoke({
         "messages" : [("user", f"Find recent, reliable and detailed information about :{topic}")]
     })
-
-    tool_output = ""
-    for msg in search_results["messages"]:
-        if msg.__class__.__name__ == "ToolMessage":
-            tool_output = msg.content
-            break
-
-    state["search_results"] = tool_output
+    state["search_results"] = search_results["messages"][-1].content
 
     print("\n  search result " , state['search_results'])
 
@@ -38,8 +32,7 @@ def run_research_pipeline(topic : str) -> dict:
             f"Search Results: \n {state['search_results'][:800]}"
           )]
     })
-
-    state['scraped_content']=reader_result['messages'][-1].content
+    state['scraped_content'] = reader_result['messages'][-1].content
     
     print("\n scraped content \n", state['scraped_content'])
 
@@ -60,6 +53,8 @@ def run_research_pipeline(topic : str) -> dict:
         "research" : research_combined
     })
 
+    if len(state["report"]) > 1800:
+        state["report"] = state["report"][:1800].rsplit("\n\n", 1)[0] + "\n\n..."
 
     print("\n Final Report \n", state['report'])
 
@@ -69,9 +64,12 @@ def run_research_pipeline(topic : str) -> dict:
     print("setp 4 - Critic is reviewing the report  ... ")
     print("="*50)
     
-    state["feedback"]= critic_chain.invoke({
-        "report" : state['report']
-    })
+    try:
+        state["feedback"]= critic_chain.invoke({
+            "report" : state.get('report', 'No report generated')
+        })
+    except Exception:
+        state["feedback"] = "Critic feedback is unavailable right now."
 
     print("\n Critic Report \n", state['feedback'])
 

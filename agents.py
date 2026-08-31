@@ -1,93 +1,90 @@
-from dotenv import load_dotenv, find_dotenv
 import os
-
-print("Current Working Directory:", os.getcwd())
-print("ENV FILE FOUND:", find_dotenv())
-
-load_dotenv(find_dotenv(), override=True)
-
-#print("Loaded Key:", os.getenv("GROQ_API_KEY"))
-
 from dotenv import load_dotenv
-import os
-
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain.agents import create_agent
-
 from tools import web_search, scrape_url
 
-load_dotenv()
-
-# Model Setup
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
+load_dotenv(override=True)
+agent_llm = ChatGroq(
+    model="openai/gpt-oss-20b",
     temperature=0
 )
 
-#1st agent 
+writer_llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    temperature=0.2
+)
+
+critic_llm = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0
+)
 def build_search_agent():
     return create_agent(
-        model= llm,
-        tools=[web_search] 
+        model=agent_llm,
+        tools=[web_search],
+        system_prompt="""You are a research search agent.
+Always call web_search with exactly one argument:
+{"query": "your search query"}
+Never use cursor, id, page, or offset."""
     )
 
-#2nd agent 
 def build_reader_agent():
     return create_agent(
-        model= llm,
-        tools=[scrape_url]
+        model=agent_llm,
+        tools=[scrape_url],
+        system_prompt="""You are a research reader agent.
+Always call scrape_url with exactly one argument:
+{"url": "https://example.com"}
+The argument name MUST be "url"."""
     )
 
-#writer chain 
-writer_prompt= ChatPromptTemplate.from_messages([
-    ("system", "you are an expert research writer. write clear ,structured and insightful reports."),
-    ("human", """write a detailed research report on the topic below.
-    
-     
-     Topic: {topic}
+writer_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are an expert research writer. Write concise, balanced, factual reports with clear structure and no fluff."),
+    ("human", """Write a short research report on the topic below.
 
-     Research Gathered:
-     {research}
+Topic: {topic}
 
-     Structure the report as:
-     - Introduction
-     - Key Findings(minimun 3 well-explained points)
-     - conclusion
-     - Sources (list all URLs found in the research)
+Research Gathered:
+{research}
 
-     Be detailed, factual and professional.
-     """),
+Requirements:
+- Keep the total report under 700 words.
+- Use only 4 sections in this exact order: Introduction, Key Findings, Conclusion, Sources.
+- Include exactly 3 short key findings.
+- Keep each section short and balanced.
+- No long paragraphs, no repeated ideas, no filler.
+- Use only URLs found in the research.
+- Be factual, professional, and concise.
+"""),
 ])
 
-writer_chain = writer_prompt | llm | StrOutputParser()
+writer_chain = writer_prompt | writer_llm | StrOutputParser()
 
-#critic_chain
 critic_prompt = ChatPromptTemplate.from_messages([
     ("system", "you are a sharp and constructive research critic. Be honest and specific."),
     ("human", """Review the research report below and execute it strictly.
 
-
 Report:
-     {report}
+{report}
 
 Respond in this exact format:
-     
+
 score: x/10
-     
-Strengths:                
+
+Strengths:
 - ...
-- ... 
-     
+- ...
+
 Areas to Improve:
 - ...
 - ...
 
 one line verdict:
-...  """),
+...
+"""),
 ])
 
-
-critic_chain=critic_prompt | llm | StrOutputParser()
-
+critic_chain = critic_prompt | critic_llm | StrOutputParser()
